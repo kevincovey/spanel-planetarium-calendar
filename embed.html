@@ -68,6 +68,12 @@
       var view = (p.get("view") === "list") ? "listMonth" : "dayGridMonth";
       var date = p.get("date") || undefined;
 
+      function fmtTime(d) {
+        var h = d.getHours(), m = d.getMinutes();
+        var ap = h < 12 ? "am" : "pm", h12 = h % 12; if (h12 === 0) h12 = 12;
+        return m ? h12 + ":" + String(m).padStart(2, "0") + ap : h12 + ap;
+      }
+
       var feed = cal === "staff" ? "staff-calendar.ics" : "availability.ics";
       var legend = document.getElementById("legend");
       if (cal === "staff") {
@@ -93,6 +99,13 @@
         eventClassNames: function (arg) {
           if (cal === "availability") return ["ev-avail"];
           return String(arg.event.title).indexOf("(Tentative)") === 0 ? ["ev-tent"] : ["ev-conf"];
+        },
+        eventDidMount: function (arg) {
+          // Availability: prefix each entry with its start time, e.g. "10am - Available".
+          if (cal === "availability" && arg.event.start) {
+            var el = arg.el.querySelector(".fc-event-title");
+            if (el) el.textContent = fmtTime(arg.event.start) + " - " + arg.event.title;
+          }
         },
         events: {
           url: feed,
