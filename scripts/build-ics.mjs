@@ -1,10 +1,13 @@
 // ============================================================================
-// build-ics.mjs — generates TWO public calendar feeds:
+// build-ics.mjs — generates two public calendar feeds:
 //
-//   availability.ics   OPEN slots only, as "Available", no personal info.
+//   availability.ics   PUBLIC schedule: every timeslot, sanitized.
+//                        - open slots      -> "Available"
+//                        - booked slots    -> "Reserved"  (NO group/staff/contact)
 //                      Safe to embed on the planetarium's public website.
 //   staff-calendar.ics TENTATIVE + CONFIRMED shows for staff (group/focus/
-//                      staffing), with NO contact name or email.
+//                      staffing), with NO contact name or email. For staff to
+//                      subscribe to in their own calendars.
 //
 // Run by the GitHub Action on a schedule. Reads from Supabase with the SERVICE
 // ROLE key (a server-side secret, never shipped to browsers). Node 18+ (global
@@ -20,12 +23,11 @@ const URL = process.env.SUPABASE_URL;
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!URL || !KEY) { console.error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY"); process.exit(1); }
 
-const STATUS_LABEL = { open: "Open", tentative: "Tentative", confirmed: "Confirmed" };
+const STATUS_LABEL = { tentative: "Tentative", confirmed: "Confirmed" };
 
 function icsEscape(s) { return String(s ?? "").replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n"); }
 function icsDateTime(dateStr, timeStr) {
-  const [y, m, d] = dateStr.split("-");
-  const [hh, mm] = (timeStr || "00:00").split(":");
+  const [y, m, d] = dateStr.split("-"); const [hh, mm] = (timeStr || "00:00").split(":");
   return `${y}${m}${d}T${hh}${mm}00`;
 }
 function stampUTC() {
@@ -33,35 +35,22 @@ function stampUTC() {
   return `${n.getUTCFullYear()}${p(n.getUTCMonth()+1)}${p(n.getUTCDate())}T${p(n.getUTCHours())}${p(n.getUTCMinutes())}${p(n.getUTCSeconds())}Z`;
 }
 
-function buildICS(shows, { calName, publicMode }) {
+// events: [{ id, date, start, end, summary, desc, status?, transp? }]
+function toICS(calName, events) {
   const stamp = stampUTC();
   const lines = ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Spanel Planetarium//Availability Calendar//EN",
     "CALSCALE:GREGORIAN","METHOD:PUBLISH",`X-WR-CALNAME:${icsEscape(calName)}`,"X-WR-TIMEZONE:local"];
-  for (const s of shows) {
-    const ev = ["BEGIN:VEVENT", `UID:${s.id}@spanel-planetarium`, `DTSTAMP:${stamp}`,
-      `DTSTART:${icsDateTime(s.show_date, s.start_time)}`, `DTEND:${icsDateTime(s.show_date, s.end_time)}`];
-    if (publicMode) {
-      const summary = s.focus ? `Available — ${s.focus}` : "Available";
-      ev.push(`SUMMARY:${icsEscape(summary)}`,
-              `DESCRIPTION:${icsEscape("This planetarium show time is available to book.")}`,
-              "STATUS:CONFIRMED", "TRANSP:TRANSPARENT");
-    } else {
-      const title = s.group_name || s.focus || "Planetarium show";
-      const summary = `${s.status === "confirmed" ? "" : "(Tentative) "}${title}`;
-      const d = [];
-      if (s.focus) d.push(`Focus: ${s.focus}`);
-      if (s.group_name) d.push(`Group: ${s.group_name}`);
-      if (s.group_size) d.push(`Size: ${s.group_size}`);
-      d.push(`Status: ${STATUS_LABEL[s.status]}${s.status === "confirmed" ? " (paid)" : " (unpaid)"}`);
-      const staff = [s.lead && `Lead: ${s.lead}`, s.driver && `Driver: ${s.driver}`,
-                     s.usher1 && `Usher: ${s.usher1}`, s.usher2 && `Usher: ${s.usher2}`].filter(Boolean);
-      if (staff.length) d.push(staff.join(" · "));
-      // contact_name / contact_email are never fetched or emitted (private).
-      ev.push(`SUMMARY:${icsEscape(summary)}`, `DESCRIPTION:${icsEscape(d.join("\n"))}`,
-              `STATUS:${s.status === "confirmed" ? "CONFIRMED" : "TENTATIVE"}`);
-    }
-    ev.push("END:VEVENT");
-    lines.push(...ev);
+  for (const e of events) {
+    lines.push("BEGIN:VEVENT",
+      `UID:${e.id}@spanel-planetarium`,
+      `DTSTAMP:${stamp}`,
+      `DTSTART:${icsDateTime(e.date, e.start)}`,
+      `DTEND:${icsDateTime(e.date, e.end)}`,
+      `SUMMARY:${icsEscape(e.summary)}`,
+      `DESCRIPTION:${icsEscape(e.desc || "")}`);
+    if (e.status) lines.push(`STATUS:${e.status}`);
+    if (e.transp) lines.push(`TRANSP:${e.transp}`);
+    lines.push("END:VEVENT");
   }
   lines.push("END:VCALENDAR");
   return lines.join("\r\n");
@@ -73,14 +62,46 @@ async function query(params) {
   return res.json();
 }
 
-// Availability feed — open slots, minimal columns (no staff, group, or contact).
-const availCols = "id,show_date,start_time,end_time,focus";
-const availShows = await query(`select=${availCols}&status=eq.open&order=show_date.asc&order=start_time.asc`);
-writeFileSync("availability.ics", buildICS(availShows, { calName: "Spanel Planetarium — Availability", publicMode: true }));
-console.log(`Wrote availability.ics with ${availShows.length} open slots.`);
+// ---- PUBLIC feed: open -> "Available", booked -> "Reserved" (sanitized) --------
+const openRows = await query("select=id,show_date,start_time,end_time,focus&status=eq.open&order=show_date.asc&order=start_time.asc");
+// NOTE: for reserved we deliberately DO NOT fetch group_name/focus/contact — the
+// public file must never contain them.
+const bookedRows = await query("select=id,show_date,start_time,end_time&status=in.(tentative,confirmed)&order=show_date.asc&order=start_time.asc");
 
-// Staff feed — booked shows, staffing columns, NO contact fields.
+const publicEvents = []
+  .concat(openRows.map(s => ({
+    id: s.id, date: s.show_date, start: s.start_time, end: s.end_time,
+    summary: s.focus ? `Available — ${s.focus}` : "Available",
+    desc: "This planetarium show time is available to book.",
+    status: "CONFIRMED", transp: "TRANSPARENT"
+  })))
+  .concat(bookedRows.map(s => ({
+    id: s.id, date: s.show_date, start: s.start_time, end: s.end_time,
+    summary: "Reserved", desc: "This time is reserved.",
+    status: "CONFIRMED", transp: "TRANSPARENT"
+  })));
+writeFileSync("availability.ics", toICS("Spanel Planetarium — Availability", publicEvents));
+console.log(`Wrote availability.ics: ${openRows.length} available + ${bookedRows.length} reserved.`);
+
+// ---- STAFF feed: booked shows with detail, NO contact fields -------------------
 const staffCols = "id,show_date,start_time,end_time,status,focus,group_name,group_size,lead,driver,usher1,usher2";
-const staffShows = await query(`select=${staffCols}&status=in.(tentative,confirmed)&order=show_date.asc&order=start_time.asc`);
-writeFileSync("staff-calendar.ics", buildICS(staffShows, { calName: "Spanel Planetarium — Shows", publicMode: false }));
-console.log(`Wrote staff-calendar.ics with ${staffShows.length} booked shows.`);
+const staffRows = await query(`select=${staffCols}&status=in.(tentative,confirmed)&order=show_date.asc&order=start_time.asc`);
+const staffEvents = staffRows.map(s => {
+  const title = s.group_name || s.focus || "Planetarium show";
+  const d = [];
+  if (s.focus) d.push(`Focus: ${s.focus}`);
+  if (s.group_name) d.push(`Group: ${s.group_name}`);
+  if (s.group_size) d.push(`Size: ${s.group_size}`);
+  d.push(`Status: ${STATUS_LABEL[s.status]}${s.status === "confirmed" ? " (paid)" : " (unpaid)"}`);
+  const staff = [s.lead && `Lead: ${s.lead}`, s.driver && `Driver: ${s.driver}`,
+                 s.usher1 && `Usher: ${s.usher1}`, s.usher2 && `Usher: ${s.usher2}`].filter(Boolean);
+  if (staff.length) d.push(staff.join(" · "));
+  return {
+    id: s.id, date: s.show_date, start: s.start_time, end: s.end_time,
+    summary: `${s.status === "confirmed" ? "" : "(Tentative) "}${title}`,
+    desc: d.join("\n"),
+    status: s.status === "confirmed" ? "CONFIRMED" : "TENTATIVE"
+  };
+});
+writeFileSync("staff-calendar.ics", toICS("Spanel Planetarium — Shows", staffEvents));
+console.log(`Wrote staff-calendar.ics with ${staffRows.length} booked shows.`);

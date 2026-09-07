@@ -560,10 +560,10 @@ function buildICS(shows, opts) {
     const ev = ["BEGIN:VEVENT", `UID:${s.id}@spanel-planetarium`, `DTSTAMP:${stamp}`,
       `DTSTART:${icsDateTime(s.show_date, s.start_time)}`, `DTEND:${icsDateTime(s.show_date, s.end_time)}`];
     if (publicMode) {
-      const summary = s.focus ? `Available — ${s.focus}` : "Available";
-      ev.push(`SUMMARY:${icsEscape(summary)}`,
-              `DESCRIPTION:${icsEscape("This planetarium show time is available to book.")}`,
-              "STATUS:CONFIRMED", "TRANSP:TRANSPARENT");
+      const isOpen = s.status === "open";
+      const summary = isOpen ? (s.focus ? `Available — ${s.focus}` : "Available") : "Reserved";
+      const desc = isOpen ? "This planetarium show time is available to book." : "This time is reserved.";
+      ev.push(`SUMMARY:${icsEscape(summary)}`, `DESCRIPTION:${icsEscape(desc)}`, "STATUS:CONFIRMED", "TRANSP:TRANSPARENT");
     } else {
       const title = s.group_name || s.focus || "Planetarium show";
       const summary = `${s.status==="confirmed"?"":"(Tentative) "}${title}`;
@@ -591,8 +591,8 @@ function download(name, text) {
 }
 function downloadAvailabilityICS() {
   download(`spanel-availability-${todayYMD()}.ics`,
-    buildICS(App.shows, { statuses: new Set(["open"]), calName: "Spanel Planetarium — Availability", publicMode: true }));
-  toast("Availability feed downloaded (open slots only, no personal info).");
+    buildICS(App.shows, { statuses: new Set(["open", "tentative", "confirmed"]), calName: "Spanel Planetarium — Availability", publicMode: true }));
+  toast("Availability feed downloaded (available + reserved, no personal info).");
 }
 function downloadStaffICS() {
   download(`spanel-staff-${todayYMD()}.ics`,

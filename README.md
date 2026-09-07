@@ -104,8 +104,8 @@ The app publishes **two** feeds for two different audiences:
 
 | Feed | File | Contents | Audience |
 |------|------|----------|----------|
-| **Availability** | `availability.ics` | **Open slots only**, shown as "Available". No group, staff, or contact info. | **Public** — embed on the planetarium website so visitors see bookable times. |
-| **Staff** | `staff-calendar.ics` | **Tentative + confirmed** shows: group, size, focus, staffing. **No contact name/email.** | **Staff** — subscribe to know when they're needed in the dome. |
+| **Availability** | `availability.ics` | **Every timeslot, sanitized:** open slots as "Available", booked slots as "Reserved". No group, staff, or contact info ever. | **Public** — embed on the planetarium website so visitors see what's open and what's taken. |
+| **Staff** | `staff-calendar.ics` | **Tentative + confirmed** shows: group, size, focus, staffing. **No contact name/email.** | **Staff** — subscribe in a personal calendar to know when they're needed in the dome. |
 
 **One‑time files:** on the Calendar tab, **⬇ Availability .ics** and **⬇ Staff .ics**
 download snapshots.
@@ -138,50 +138,33 @@ ask and I'll wire it up.
 
 ---
 
-## Embedding a calendar on your website (Drupal, etc.)
+## Embedding the availability calendar on your website (Drupal, etc.)
 
 An `.ics` file is calendar *data*, not a web page, so it can't be iframed directly.
-The included **`embed.html`** renders a feed as a real month/agenda calendar you
-*can* iframe. It reads a feed via a query parameter:
+The included **`embed.html`** renders the public `availability.ics` feed as a real
+month/agenda calendar you *can* iframe. Every timeslot is shown, sanitized and
+each leading with its start time:
 
-- `?cal=availability` — open slots ("10am - Available"), for the public site
-- `?cal=staff` — booked shows, colored by confirmed/tentative
-- `?cal=both` — **both feeds overlaid, with checkboxes so the viewer can toggle
-  each on/off** (blue = available, green = confirmed, amber = tentative)
-- add `&view=list` for an agenda list instead of a month grid
+- open slots → **"10am - Available"** (green)
+- booked slots → **"10am - Reserved"** (gray)
 
-⚠️ **Privacy:** the checkboxes only appear for `cal=both` (or `cal=staff`), and
-the staff layer shows group names. Use `cal=availability` on public pages — it
-shows only open times with **no way for a visitor to reveal bookings**. Reserve
-`cal=both`/`cal=staff` for staff/internal pages.
+No group names, contacts, or staffing ever appear — the public feed file itself
+doesn't contain them. Optional query params: `?view=list` for an agenda list, and
+`?date=YYYY-MM-DD` to open on a specific month.
 
-**Drupal:** on a Basic/Full‑HTML page, add a Block or Custom HTML and paste an
-`<iframe>`. (In Drupal's editor, use the **Source/`<>`** view so it doesn't strip
-the tag; or allow `<iframe>` in the text format's allowed‑tags.)
+**Drupal:** on a Basic/Full‑HTML page, add a Block or Custom HTML and paste the
+`<iframe>` below. (In Drupal's editor, use the **Source/`<>`** view so it doesn't
+strip the tag; or allow `<iframe>` in the text format's allowed‑tags.)
 
-Public availability calendar:
 ```html
-<iframe src="https://kevincovey.github.io/spanel-planetarium-calendar/embed.html?cal=availability"
+<iframe src="https://kevincovey.github.io/spanel-planetarium-calendar/embed.html"
         style="width:100%;height:720px;border:0;" loading="lazy"
         title="Planetarium availability"></iframe>
 ```
 
-Staff calendar (⚠️ shows group names — only put this on a staff/internal page):
-```html
-<iframe src="https://kevincovey.github.io/spanel-planetarium-calendar/embed.html?cal=staff"
-        style="width:100%;height:720px;border:0;" loading="lazy"
-        title="Planetarium staff calendar"></iframe>
-```
-
-Combined view with viewer toggles (⚠️ staff/internal pages only):
-```html
-<iframe src="https://kevincovey.github.io/spanel-planetarium-calendar/embed.html?cal=both"
-        style="width:100%;height:760px;border:0;" loading="lazy"
-        title="Planetarium calendar"></iframe>
-```
-
-The embed refreshes whenever the feeds rebuild (hourly). Neither embed contains
-contact names or emails.
+The embed refreshes whenever the feed rebuilds (hourly), and contains no personal
+information. (Staff who want the full booking detail subscribe to
+`staff-calendar.ics` in their own calendar app — see the feeds section above.)
 
 ## Publish the app on GitHub Pages
 
