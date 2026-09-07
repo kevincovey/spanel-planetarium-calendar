@@ -138,6 +138,37 @@ ask and I'll wire it up.
 
 ---
 
+## Embedding a calendar on your website (Drupal, etc.)
+
+An `.ics` file is calendar *data*, not a web page, so it can't be iframed directly.
+The included **`embed.html`** renders a feed as a real month/agenda calendar you
+*can* iframe. It reads a feed via a query parameter:
+
+- `?cal=availability` — open slots ("Available"), for the public site
+- `?cal=staff` — booked shows, colored by confirmed/tentative
+- add `&view=list` for an agenda list instead of a month grid
+
+**Drupal:** on a Basic/Full‑HTML page, add a Block or Custom HTML and paste an
+`<iframe>`. (In Drupal's editor, use the **Source/`<>`** view so it doesn't strip
+the tag; or allow `<iframe>` in the text format's allowed‑tags.)
+
+Public availability calendar:
+```html
+<iframe src="https://kevincovey.github.io/spanel-planetarium-calendar/embed.html?cal=availability"
+        style="width:100%;height:720px;border:0;" loading="lazy"
+        title="Planetarium availability"></iframe>
+```
+
+Staff calendar (⚠️ shows group names — only put this on a staff/internal page):
+```html
+<iframe src="https://kevincovey.github.io/spanel-planetarium-calendar/embed.html?cal=staff"
+        style="width:100%;height:720px;border:0;" loading="lazy"
+        title="Planetarium staff calendar"></iframe>
+```
+
+The embed refreshes whenever the feeds rebuild (hourly). Neither embed contains
+contact names or emails.
+
 ## Publish the app on GitHub Pages
 
 ```bash
