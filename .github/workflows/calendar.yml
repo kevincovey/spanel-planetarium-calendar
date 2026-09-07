@@ -1,0 +1,50 @@
+name: Build calendar feed
+
+# Rebuilds two public feeds and commits them:
+#   availability.ics    open slots (public website)
+#   staff-calendar.ics  booked shows, no contact info (staff subscription)
+# Subscribe / embed via https://YOURNAME.github.io/REPO/<file>.ics
+#
+# Requires two repository secrets (Settings -> Secrets and variables -> Actions):
+#   SUPABASE_URL
+#   SUPABASE_SERVICE_ROLE_KEY   (Supabase -> Project Settings -> API -> service_role)
+
+on:
+  schedule:
+    - cron: "17 * * * *"      # hourly, at :17 past
+  workflow_dispatch:           # lets you run it manually from the Actions tab
+  push:
+    branches: [ main ]
+    paths: [ "scripts/build-ics.mjs", ".github/workflows/calendar.yml" ]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: calendar-feed
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Build feeds
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/build-ics.mjs
+      - name: Commit if changed
+        run: |
+          if [ -n "$(git status --porcelain availability.ics staff-calendar.ics)" ]; then
+            git config user.name  "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add availability.ics staff-calendar.ics
+            git commit -m "Update calendar feeds"
+            git push
+          else
+            echo "No changes to feeds"
+          fi

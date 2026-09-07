@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spanel Planetarium — Availability Calendar</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="app">
+    <div class="logo">🔭</div>
+    <div>
+      <h1>Spanel Planetarium</h1>
+      <div class="sub">Show Availability Calendar</div>
+    </div>
+    <div class="spacer"></div>
+    <div id="authArea" class="auth-area" hidden>
+      <span id="authWho" class="auth-who" hidden></span>
+      <button class="btn small" id="authSignInBtn" hidden>Sign in</button>
+      <button class="btn small ghost" id="authSignOutBtn" hidden>Sign out</button>
+    </div>
+    <div id="connBadge" class="conn-badge conn-local" title="Click to open Setup">
+      <span class="dot"></span><span id="connText">Local demo</span>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button data-tab="calendar" class="active">📅 Calendar</button>
+    <button data-tab="shows">📋 Shows</button>
+    <button data-tab="defaults">🗓️ Weekly Defaults</button>
+    <button data-tab="dashboard">📊 Dashboard</button>
+    <button data-tab="setup">⚙️ Setup &amp; Sharing</button>
+  </nav>
+
+  <main>
+    <!-- ============ CALENDAR ============ -->
+    <section id="view-calendar" class="view active">
+      <div class="toolbar">
+        <div class="cal-nav">
+          <button class="btn small" id="calPrev" title="Earlier">◀</button>
+          <button class="btn small" id="calToday">Today</button>
+          <button class="btn small" id="calNext" title="Later">▶</button>
+          <strong id="calRange" style="margin-left:8px;"></strong>
+        </div>
+        <div class="spacer"></div>
+        <div class="legend">
+          <span class="chip-sample"><span class="swatch open"></span> Open slot</span>
+          <span class="chip-sample"><span class="swatch tentative"></span> Tentative (unpaid)</span>
+          <span class="chip-sample"><span class="swatch confirmed"></span> Confirmed (paid)</span>
+        </div>
+        <button class="btn" id="calIcsAvail" title="Open slots only — safe for the public website">⬇ Availability .ics</button>
+        <button class="btn" id="calIcsStaff" title="Booked shows for staff — no contact info">⬇ Staff .ics</button>
+        <button class="btn primary" id="calAddBtn">+ Add show</button>
+      </div>
+      <div id="calMonths" class="months months-4"></div>
+    </section>
+
+    <!-- ============ DASHBOARD ============ -->
+    <section id="view-dashboard" class="view">
+      <div class="toolbar">
+        <h2>Dashboard</h2>
+        <label class="fld"><span>From</span><input type="date" id="dashFrom" /></label>
+        <label class="fld"><span>To</span><input type="date" id="dashTo" /></label>
+        <div class="btn-group" id="dashPresets">
+          <button class="btn small" data-preset="quarter">Current quarter</button>
+          <button class="btn small" data-preset="ytd">Year to date</button>
+          <button class="btn small" data-preset="year">This year</button>
+          <button class="btn small" data-preset="all">All time</button>
+        </div>
+      </div>
+      <div id="dashStats" class="stat-row"></div>
+      <div class="dash-grid">
+        <div class="card"><h3 class="card-title">Shows by month</h3><div id="dashByMonth"></div></div>
+        <div class="card"><h3 class="card-title">By status</h3><div id="dashByStatus"></div></div>
+        <div class="card"><h3 class="card-title">Presenter load (lead shows)</h3><div id="dashByPresenter"></div></div>
+      </div>
+    </section>
+
+    <!-- ============ SHOWS ============ -->
+    <section id="view-shows" class="view">
+      <div class="toolbar">
+        <h2>Shows</h2>
+        <label class="fld"><span>From</span><input type="date" id="showFrom" /></label>
+        <label class="fld"><span>To</span><input type="date" id="showTo" /></label>
+        <label class="fld"><span>Status</span>
+          <select id="showStatusFilter">
+            <option value="">All</option>
+            <option value="open">Open</option>
+            <option value="tentative">Tentative</option>
+            <option value="confirmed">Confirmed</option>
+          </select>
+        </label>
+        <div class="spacer"></div>
+        <button class="btn" id="showExportBtn">⬇ Export CSV</button>
+        <button class="btn primary" id="showAddBtn">+ Add show</button>
+      </div>
+      <div id="showsTableWrap" class="table-wrap"></div>
+    </section>
+
+    <!-- ============ WEEKLY DEFAULTS ============ -->
+    <section id="view-defaults" class="view">
+      <div class="toolbar">
+        <h2>Weekly Defaults</h2>
+        <div class="spacer"></div>
+        <button class="btn" id="defAddRowBtn">+ Add slot</button>
+        <button class="btn ghost" id="defResetBtn">Reset to standard week</button>
+        <button class="btn primary" id="defSaveBtn">Save defaults</button>
+      </div>
+      <p class="hint">Define your typical week: which timeslots run on which weekdays, and the default staff for each.
+        These flow into a new quarter when you click <b>Generate quarter</b> (in Setup). Uncheck <b>Active</b> to skip a slot.</p>
+      <div id="defaultsTableWrap" class="table-wrap"></div>
+    </section>
+
+    <!-- ============ SETUP & SHARING ============ -->
+    <section id="view-setup" class="view">
+      <div class="setup-grid">
+        <div class="card">
+          <h2 style="margin-top:0;">Quarters</h2>
+          <p class="hint">A quarter is a 3-month window. Set one up, then generate its show slots from your weekly defaults.
+            To start a new season, add another quarter — old ones stay in your history.</p>
+          <div class="toolbar" style="margin-bottom:10px;">
+            <label class="fld"><span>Name</span><input type="text" id="qName" placeholder="e.g. Fall 2026" /></label>
+            <label class="fld"><span>Start date (day 1 of the 3 months)</span><input type="date" id="qStart" /></label>
+            <button class="btn" id="qAddBtn" style="align-self:end;">+ Create quarter</button>
+          </div>
+          <div id="quartersList"></div>
+          <div class="toolbar" style="margin-top:14px;border-top:1px solid var(--line);padding-top:14px;">
+            <label class="fld"><span>Generate into</span>
+              <select id="qTargetSelect" style="min-width:200px;"></select></label>
+            <button class="btn primary" id="qGenerateBtn" style="align-self:end;">⚡ Generate quarter from weekly defaults</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 style="margin-top:0;">Cloud sync &amp; sign-in (Supabase)</h2>
+          <p class="hint" id="connStatusLine"></p>
+          <ol class="steps">
+            <li>Create a free project at <span class="mono">supabase.com</span>.</li>
+            <li>In the Supabase <b>SQL Editor</b>, paste <span class="mono">schema.sql</span> and click Run.</li>
+            <li>Add each staff member under <b>Authentication → Users → Add user</b>.</li>
+            <li>Open <b>Project Settings → API</b>, copy the <b>Project URL</b> and the <b>anon public</b> key, paste below, Connect.</li>
+          </ol>
+          <label class="fld full"><span>Supabase Project URL</span>
+            <input type="text" id="cfgUrl" placeholder="https://xxxx.supabase.co" /></label>
+          <label class="fld full" style="margin-top:10px;"><span>Anon public key</span>
+            <input type="text" id="cfgKey" placeholder="eyJhbGciOi..." /></label>
+          <div class="toolbar" style="margin-top:12px;">
+            <button class="btn primary" id="cfgConnectBtn">Connect</button>
+            <button class="btn ghost" id="cfgClearBtn">Disconnect (use local demo)</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 style="margin-top:0;">Subscribable calendar feeds</h2>
+          <p class="hint">The app publishes <b>two</b> live feeds:</p>
+          <ul class="hint" style="margin-top:0;">
+            <li><b>Availability</b> (<span class="mono">availability.ics</span>) — <b>open slots only</b>, marked
+              "Available", with no personal info. Safe to embed on the planetarium's public website.</li>
+            <li><b>Staff</b> (<span class="mono">staff-calendar.ics</span>) — <b>tentative &amp; confirmed</b> shows so
+              staff know when they're needed in the dome. Includes group/focus/staffing but <b>never contact
+              names or emails</b>.</li>
+          </ul>
+          <p class="hint" style="margin-top:0;">Two ways to produce them: the <b>⬇ Availability .ics</b> /
+            <b>⬇ Staff .ics</b> buttons on the Calendar tab (one-time snapshots), or the included GitHub Action which
+            rebuilds both on a schedule for live subscription. Subscribe to
+            <span class="mono">https://YOURNAME.github.io/REPO/&lt;file&gt;.ics</span>. Full steps in
+            <span class="mono">README.md</span> → “Subscribable calendar feeds”.</p>
+        </div>
+
+        <div class="card">
+          <h2 style="margin-top:0;">Danger zone</h2>
+          <div class="toolbar">
+            <button class="btn" id="pushLocalBtn">⬆ Push local demo data to cloud</button>
+            <button class="btn danger" id="wipeLocalBtn">Clear local demo data</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============ SHOW EDITOR MODAL ============ -->
+  <div class="modal-backdrop" id="modalBackdrop">
+    <div class="modal" role="dialog" aria-modal="true">
+      <header><h3 id="modalTitle">Edit show</h3></header>
+      <div class="body">
+        <label class="fld full"><span>Status</span>
+          <div class="status-seg" id="mStatus">
+            <button type="button" class="open" data-v="open">Open</button>
+            <button type="button" class="tentative" data-v="tentative">Tentative (unpaid)</button>
+            <button type="button" class="confirmed" data-v="confirmed">Confirmed (paid)</button>
+          </div>
+        </label>
+        <label class="fld"><span>Show date <b>*</b></span><input type="date" id="mDate" /></label>
+        <label class="fld"><span>Focus / topic</span><input type="text" id="mFocus" placeholder="e.g. Winter Constellations" /></label>
+        <label class="fld"><span>Start time</span><input type="time" id="mStart" /></label>
+        <label class="fld"><span>End time</span><input type="time" id="mEnd" /></label>
+        <label class="fld"><span>Group name</span><input type="text" id="mGroup" /></label>
+        <label class="fld"><span>Group size</span><input type="number" id="mSize" min="0" /></label>
+        <label class="fld"><span>Contact name <span class="priv">private</span></span><input type="text" id="mContact" /></label>
+        <label class="fld"><span>Contact email <span class="priv">private</span></span><input type="email" id="mEmail" /></label>
+        <label class="fld"><span>Lead presenter</span><input type="text" id="mLead" /></label>
+        <label class="fld"><span>Driver</span><input type="text" id="mDriver" /></label>
+        <label class="fld"><span>Usher 1</span><input type="text" id="mUsher1" /></label>
+        <label class="fld"><span>Usher 2</span><input type="text" id="mUsher2" /></label>
+        <label class="fld full"><span>Notes</span><input type="text" id="mNotes" /></label>
+      </div>
+      <footer>
+        <button class="btn danger" id="mDeleteBtn">Delete</button>
+        <div class="spacer"></div>
+        <button class="btn ghost" id="mCancelBtn">Cancel</button>
+        <button class="btn primary" id="mSaveBtn">Save show</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ============ LOGIN MODAL ============ -->
+  <div class="modal-backdrop" id="loginBackdrop">
+    <div class="modal" style="max-width:420px;" role="dialog" aria-modal="true">
+      <header><h3>Staff sign-in</h3></header>
+      <div class="body" style="grid-template-columns:1fr;">
+        <p class="hint" style="margin:0;">This planetarium's schedule is private. Sign in with the account your
+          administrator created for you in Supabase.</p>
+        <label class="fld full"><span>Email</span><input type="email" id="loginEmail" autocomplete="username" /></label>
+        <label class="fld full"><span>Password</span><input type="password" id="loginPass" autocomplete="current-password" /></label>
+        <div id="loginError" class="login-error" hidden></div>
+      </div>
+      <footer>
+        <button class="btn ghost" id="loginDemoBtn" title="Work offline in this browser only">Use local demo instead</button>
+        <div class="spacer"></div>
+        <button class="btn primary" id="loginBtn">Sign in</button>
+      </footer>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script src="config.js" onerror="this.remove()"></script>
+  <script src="app.js"></script>
+</body>
+</html>

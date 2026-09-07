@@ -1,0 +1,10 @@
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.log
+
+# Node (only used by the feed script in CI; nothing installed locally)
+node_modules/
+
+# Local scratch
+*.tmp
