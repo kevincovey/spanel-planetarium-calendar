@@ -144,9 +144,16 @@ An `.ics` file is calendar *data*, not a web page, so it can't be iframed direct
 The included **`embed.html`** renders a feed as a real month/agenda calendar you
 *can* iframe. It reads a feed via a query parameter:
 
-- `?cal=availability` — open slots ("Available"), for the public site
+- `?cal=availability` — open slots ("10am - Available"), for the public site
 - `?cal=staff` — booked shows, colored by confirmed/tentative
+- `?cal=both` — **both feeds overlaid, with checkboxes so the viewer can toggle
+  each on/off** (blue = available, green = confirmed, amber = tentative)
 - add `&view=list` for an agenda list instead of a month grid
+
+⚠️ **Privacy:** the checkboxes only appear for `cal=both` (or `cal=staff`), and
+the staff layer shows group names. Use `cal=availability` on public pages — it
+shows only open times with **no way for a visitor to reveal bookings**. Reserve
+`cal=both`/`cal=staff` for staff/internal pages.
 
 **Drupal:** on a Basic/Full‑HTML page, add a Block or Custom HTML and paste an
 `<iframe>`. (In Drupal's editor, use the **Source/`<>`** view so it doesn't strip
@@ -164,6 +171,13 @@ Staff calendar (⚠️ shows group names — only put this on a staff/internal p
 <iframe src="https://kevincovey.github.io/spanel-planetarium-calendar/embed.html?cal=staff"
         style="width:100%;height:720px;border:0;" loading="lazy"
         title="Planetarium staff calendar"></iframe>
+```
+
+Combined view with viewer toggles (⚠️ staff/internal pages only):
+```html
+<iframe src="https://kevincovey.github.io/spanel-planetarium-calendar/embed.html?cal=both"
+        style="width:100%;height:760px;border:0;" loading="lazy"
+        title="Planetarium calendar"></iframe>
 ```
 
 The embed refreshes whenever the feeds rebuild (hourly). Neither embed contains
