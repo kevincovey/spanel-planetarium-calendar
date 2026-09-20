@@ -50,6 +50,7 @@
         </div>
         <button class="btn" id="calIcsAvail" title="Open slots only — safe for the public website">⬇ Availability .ics</button>
         <button class="btn" id="calIcsStaff" title="Booked shows for staff — no contact info">⬇ Staff .ics</button>
+        <button class="btn" id="calSubStaff" title="Copy the live staff feed URL to paste into Google Calendar or Outlook">🔗 Copy staff subscribe URL</button>
         <button class="btn primary" id="calAddBtn">+ Add show</button>
       </div>
       <div id="calMonths" class="months months-4"></div>
@@ -162,9 +163,21 @@
           </ul>
           <p class="hint" style="margin-top:0;">Two ways to produce them: the <b>⬇ Availability .ics</b> /
             <b>⬇ Staff .ics</b> buttons on the Calendar tab (one-time snapshots), or the included GitHub Action which
-            rebuilds both on a schedule for live subscription. Subscribe to
-            <span class="mono">https://YOURNAME.github.io/REPO/&lt;file&gt;.ics</span>. Full steps in
-            <span class="mono">README.md</span> → “Subscribable calendar feeds”.</p>
+            rebuilds both on a schedule for live subscription.</p>
+          <p class="hint" style="margin-top:0;">To subscribe, use the <b>GitHub Pages</b> URL — the
+            <b>🔗 Copy staff subscribe URL</b> button on the Calendar tab puts the right one on your clipboard:</p>
+          <ul class="hint" style="margin-top:0;">
+            <li><span class="mono" id="subUrlStaff">…/staff-calendar.ics</span> — staff</li>
+            <li><span class="mono" id="subUrlAvail">…/availability.ics</span> — public</li>
+          </ul>
+          <p class="hint" style="margin-top:0;"><b>⚠ Do not use the <span class="mono">github.com/…/blob/…</span>
+            URL</b> from your browser's address bar while viewing the file on GitHub. That address returns a
+            <i>web page</i>, not calendar data, so Google Calendar adds the subscription and then silently shows an
+            <b>empty calendar</b> with no error. The <span class="mono">raw.githubusercontent.com</span> URL is served
+            as plain text and is also commonly refused. Only the
+            <span class="mono">github.io</span> address above is served as <span class="mono">text/calendar</span>.</p>
+          <p class="hint" style="margin-top:0;">Full steps in <span class="mono">README.md</span> →
+            “Subscribable calendar feeds”.</p>
         </div>
 
         <div class="card">

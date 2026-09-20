@@ -10,6 +10,44 @@ It is a **static site** (plain HTML/CSS/JS — no build step) backed by a free
 
 ---
 
+## 📅 Subscribe to the show calendar
+
+Staff — paste **this** URL into your calendar app:
+
+```
+https://kevincovey.github.io/spanel-planetarium-calendar/staff-calendar.ics
+```
+
+- **Google Calendar:** Other calendars → **+** → **From URL** → paste → **Add calendar**
+- **Outlook:** Add calendar → **Subscribe from web** → paste → **Import**
+- **Apple Calendar:** File → **New Calendar Subscription** → paste
+
+Public/website feed: `https://kevincovey.github.io/spanel-planetarium-calendar/availability.ics`
+
+> ### ⚠ Use the `github.io` URL — not the GitHub page you're reading this on
+>
+> If you browse to the `.ics` file on GitHub and copy the address bar, you get a
+> **`github.com/.../blob/main/staff-calendar.ics`** URL. That address returns an
+> **HTML web page**, not calendar data. Google Calendar will accept it, create the
+> subscription, and then show an **empty calendar with no error message** — which
+> is very hard to debug, because everything *looks* like it worked.
+>
+> | URL | What the calendar app receives | Works? |
+> |-----|-------------------------------|--------|
+> | `kevincovey.github.io/…/staff-calendar.ics` | `Content-Type: text/calendar` | ✅ |
+> | `raw.githubusercontent.com/…/staff-calendar.ics` | `text/plain` + `nosniff` | ❌ commonly refused |
+> | `github.com/…/blob/main/staff-calendar.ics` | `text/html` — a web page | ❌ empty calendar |
+>
+> In the app, the **🔗 Copy staff subscribe URL** button on the Calendar tab always
+> copies the correct one.
+
+**Not seeing new shows?** Calendar apps refresh subscriptions on their own schedule
+(a few hours to a day) and you can't force it. Google also caches per-URL, so
+removing and re-adding *the same* URL may just replay the cached copy — add
+`?v=2` to the end to force a genuinely fresh fetch.
+
+---
+
 ## Files
 
 | File | What it is |
@@ -121,9 +159,15 @@ download snapshots.
    from the **Actions** tab) and commits both `availability.ics` and
    `staff-calendar.ics` to the repo.
 3. Subscribe to `https://YOURNAME.github.io/REPO/staff-calendar.ics` (staff) or
-   `https://YOURNAME.github.io/REPO/availability.ics` (public):
+   `https://YOURNAME.github.io/REPO/availability.ics` (public) — for this repo,
+   `https://kevincovey.github.io/spanel-planetarium-calendar/staff-calendar.ics`:
    - **Google Calendar:** Other calendars → **+** → **From URL** → paste → Add.
    - **Outlook:** Add calendar → **Subscribe from web** → paste → Import.
+
+   ⚠ It **must** be the `github.io` (GitHub Pages) address. A
+   `github.com/.../blob/...` URL serves an HTML page and a
+   `raw.githubusercontent.com` URL serves `text/plain`; both yield a silently
+   empty calendar. See “Subscribe to the show calendar” at the top of this file.
 
 **Embedding availability on the website:** the simplest route is to subscribe
 `availability.ics` into a Google Calendar, then use that calendar's **Settings →
