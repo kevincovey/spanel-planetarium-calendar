@@ -545,6 +545,39 @@ function icsStamp() {
   const n = new Date(), p = x => String(x).padStart(2,"0");
   return `${n.getUTCFullYear()}${p(n.getUTCMonth()+1)}${p(n.getUTCDate())}T${p(n.getUTCHours())}${p(n.getUTCMinutes())}${p(n.getUTCSeconds())}Z`;
 }
+// Keep in sync with scripts/build-ics.mjs — the downloaded snapshots and the
+// published feeds must be readable by the same calendar clients.
+const ICS_TZID = "America/Los_Angeles";
+const ICS_VTIMEZONE = [
+  "BEGIN:VTIMEZONE",
+  `TZID:${ICS_TZID}`,
+  "BEGIN:DAYLIGHT",
+  "TZOFFSETFROM:-0800", "TZOFFSETTO:-0700", "TZNAME:PDT",
+  "DTSTART:19700308T020000", "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU",
+  "END:DAYLIGHT",
+  "BEGIN:STANDARD",
+  "TZOFFSETFROM:-0700", "TZOFFSETTO:-0800", "TZNAME:PST",
+  "DTSTART:19701101T020000", "RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU",
+  "END:STANDARD",
+  "END:VTIMEZONE",
+];
+// RFC 5545 caps a content line at 75 octets; longer ones fold onto continuation
+// lines starting with a single space. Byte-aware, so multi-byte characters
+// (the "·" in staffing lines) are never split down the middle.
+function icsFold(line) {
+  const bytes = new TextEncoder().encode(line);
+  if (bytes.length <= 75) return line;
+  const dec = new TextDecoder();
+  const parts = [];
+  let start = 0, limit = 75;          // continuation lines spend 1 octet on the leading space
+  while (start < bytes.length) {
+    let end = Math.min(start + limit, bytes.length);
+    while (end > start && end < bytes.length && (bytes[end] & 0xc0) === 0x80) end--;
+    parts.push(dec.decode(bytes.subarray(start, end)));
+    start = end; limit = 74;
+  }
+  return parts.join("\r\n ");
+}
 // Build an .ics. opts = { statuses:Set, calName, publicMode }.
 //  • publicMode (availability feed): open slots as "Available" — NO group, staff,
 //    or contact info; marked free/transparent so it doesn't block subscribers' time.
@@ -554,11 +587,14 @@ function buildICS(shows, opts) {
   const { statuses, calName, publicMode } = opts;
   const stamp = icsStamp();
   const lines = ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Spanel Planetarium//Availability Calendar//EN",
-    "CALSCALE:GREGORIAN","METHOD:PUBLISH",`X-WR-CALNAME:${icsEscape(calName)}`,"X-WR-TIMEZONE:local"];
+    "CALSCALE:GREGORIAN","METHOD:PUBLISH",`X-WR-CALNAME:${icsEscape(calName)}`,`X-WR-TIMEZONE:${ICS_TZID}`,
+    ...ICS_VTIMEZONE];
+  const uidNamespace = publicMode ? "avail" : "staff";
   for (const s of shows) {
     if (!statuses.has(s.status)) continue;
-    const ev = ["BEGIN:VEVENT", `UID:${s.id}@spanel-planetarium`, `DTSTAMP:${stamp}`,
-      `DTSTART:${icsDateTime(s.show_date, s.start_time)}`, `DTEND:${icsDateTime(s.show_date, s.end_time)}`];
+    const ev = ["BEGIN:VEVENT", `UID:${s.id}@${uidNamespace}.spanel-planetarium`, `DTSTAMP:${stamp}`,
+      `DTSTART;TZID=${ICS_TZID}:${icsDateTime(s.show_date, s.start_time)}`,
+      `DTEND;TZID=${ICS_TZID}:${icsDateTime(s.show_date, s.end_time)}`];
     if (publicMode) {
       const isOpen = s.status === "open";
       const summary = isOpen ? (s.focus ? `Available — ${s.focus}` : "Available") : "Reserved";
@@ -582,7 +618,8 @@ function buildICS(shows, opts) {
     lines.push(...ev);
   }
   lines.push("END:VCALENDAR");
-  return lines.join("\r\n");
+  // Trailing CRLF: RFC 5545 terminates every content line, the last one included.
+  return lines.map(icsFold).join("\r\n") + "\r\n";
 }
 function download(name, text) {
   const blob = new Blob([text], { type: "text/calendar" });
@@ -598,6 +635,35 @@ function downloadStaffICS() {
   download(`spanel-staff-${todayYMD()}.ics`,
     buildICS(App.shows, { statuses: new Set(["tentative","confirmed"]), calName: "Spanel Planetarium — Shows", publicMode: false }));
   toast("Staff feed downloaded (booked shows, no contact info).");
+}
+
+/* ---- Live subscription URLs -------------------------------------------------
+   The published .ics files sit next to index.html on GitHub Pages, so the right
+   subscribe URL is just this page's directory + the filename. Deriving it beats
+   hardcoding: it stays correct if the repo or account is ever renamed.
+   The trap this avoids: copying the github.com/.../blob/... address from the
+   browser while viewing the file on GitHub. That returns an HTML page, and
+   Google Calendar accepts it, then shows an empty calendar with no error. */
+function feedURL(filename) {
+  if (!/^https?:$/.test(location.protocol)) return null;   // opened from disk
+  return new URL(filename, location.href.replace(/[^/]*$/, "")).href;
+}
+async function copyStaffSubscribeURL() {
+  const url = feedURL("staff-calendar.ics");
+  if (!url) { toast("Open the app from its GitHub Pages address to copy the subscribe URL."); return; }
+  try {
+    await navigator.clipboard.writeText(url);
+    toast("Staff subscribe URL copied — paste into Google Calendar → Other calendars → + → From URL.");
+  } catch {
+    window.prompt("Copy this URL, then paste it into your calendar app:", url);
+  }
+}
+// Show the real URLs on the Setup & Sharing card instead of placeholders.
+function renderSubscribeURLs() {
+  for (const [id, file] of [["subUrlStaff","staff-calendar.ics"], ["subUrlAvail","availability.ics"]]) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = feedURL(file) || `https://YOURNAME.github.io/REPO/${file}`;
+  }
 }
 
 /* ========================================================================
@@ -642,6 +708,8 @@ function wire() {
   document.getElementById("calAddBtn").addEventListener("click", () => openEditor(null));
   document.getElementById("calIcsAvail").addEventListener("click", downloadAvailabilityICS);
   document.getElementById("calIcsStaff").addEventListener("click", downloadStaffICS);
+  document.getElementById("calSubStaff").addEventListener("click", copyStaffSubscribeURL);
+  renderSubscribeURLs();
 
   // dashboard
   ["dashFrom","dashTo"].forEach(id => document.getElementById(id).addEventListener("change", renderDashboard));
