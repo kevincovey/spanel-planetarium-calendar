@@ -25,27 +25,67 @@ if (!URL || !KEY) { console.error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE
 
 const STATUS_LABEL = { tentative: "Tentative", confirmed: "Confirmed" };
 
+// The wall-clock timezone the show_date/start_time columns are recorded in.
+// MUST be an IANA tz database name -- calendar clients resolve DTSTART against it.
+const TZID = process.env.CALENDAR_TZID || "America/Los_Angeles";
+
+// Every DTSTART/DTEND carries TZID=..., so the file has to define that zone.
+// US Pacific DST rules: forward 2nd Sunday of March, back 1st Sunday of November.
+const VTIMEZONE = [
+  "BEGIN:VTIMEZONE",
+  `TZID:${TZID}`,
+  "BEGIN:DAYLIGHT",
+  "TZOFFSETFROM:-0800", "TZOFFSETTO:-0700", "TZNAME:PDT",
+  "DTSTART:19700308T020000", "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU",
+  "END:DAYLIGHT",
+  "BEGIN:STANDARD",
+  "TZOFFSETFROM:-0700", "TZOFFSETTO:-0800", "TZNAME:PST",
+  "DTSTART:19701101T020000", "RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU",
+  "END:STANDARD",
+  "END:VTIMEZONE",
+];
+
 function icsEscape(s) { return String(s ?? "").replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n"); }
 function icsDateTime(dateStr, timeStr) {
   const [y, m, d] = dateStr.split("-"); const [hh, mm] = (timeStr || "00:00").split(":");
   return `${y}${m}${d}T${hh}${mm}00`;
 }
+// RFC 5545 caps a content line at 75 octets; longer ones fold onto continuation
+// lines starting with a single space. Counts bytes, not characters, and never
+// splits a multi-byte UTF-8 sequence.
+function foldLine(line) {
+  const bytes = Buffer.from(line, "utf8");
+  if (bytes.length <= 75) return line;
+  const parts = [];
+  let start = 0, limit = 75;          // continuation lines spend 1 octet on the leading space
+  while (start < bytes.length) {
+    let end = Math.min(start + limit, bytes.length);
+    while (end > start && end < bytes.length && (bytes[end] & 0xc0) === 0x80) end--;
+    parts.push(bytes.subarray(start, end).toString("utf8"));
+    start = end; limit = 74;
+  }
+  return parts.join("\r\n ");
+}
+
 function stampUTC() {
   const n = new Date(), p = x => String(x).padStart(2, "0");
   return `${n.getUTCFullYear()}${p(n.getUTCMonth()+1)}${p(n.getUTCDate())}T${p(n.getUTCHours())}${p(n.getUTCMinutes())}${p(n.getUTCSeconds())}Z`;
 }
 
 // events: [{ id, date, start, end, summary, desc, status?, transp? }]
-function toICS(calName, events) {
+// uidNamespace keeps the two feeds' UIDs distinct: the same show appears in both,
+// and a client subscribed to both would otherwise collapse them into one event.
+function toICS(calName, events, uidNamespace) {
   const stamp = stampUTC();
   const lines = ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Spanel Planetarium//Availability Calendar//EN",
-    "CALSCALE:GREGORIAN","METHOD:PUBLISH",`X-WR-CALNAME:${icsEscape(calName)}`,"X-WR-TIMEZONE:local"];
+    "CALSCALE:GREGORIAN","METHOD:PUBLISH",`X-WR-CALNAME:${icsEscape(calName)}`,`X-WR-TIMEZONE:${TZID}`,
+    ...VTIMEZONE];
   for (const e of events) {
     lines.push("BEGIN:VEVENT",
-      `UID:${e.id}@spanel-planetarium`,
+      `UID:${e.id}@${uidNamespace}.spanel-planetarium`,
       `DTSTAMP:${stamp}`,
-      `DTSTART:${icsDateTime(e.date, e.start)}`,
-      `DTEND:${icsDateTime(e.date, e.end)}`,
+      `DTSTART;TZID=${TZID}:${icsDateTime(e.date, e.start)}`,
+      `DTEND;TZID=${TZID}:${icsDateTime(e.date, e.end)}`,
       `SUMMARY:${icsEscape(e.summary)}`,
       `DESCRIPTION:${icsEscape(e.desc || "")}`);
     if (e.status) lines.push(`STATUS:${e.status}`);
@@ -53,7 +93,8 @@ function toICS(calName, events) {
     lines.push("END:VEVENT");
   }
   lines.push("END:VCALENDAR");
-  return lines.join("\r\n");
+  // Trailing CRLF: RFC 5545 terminates every content line, the last one included.
+  return lines.map(foldLine).join("\r\n") + "\r\n";
 }
 
 async function query(params) {
@@ -80,7 +121,7 @@ const publicEvents = []
     summary: "Reserved", desc: "This time is reserved.",
     status: "CONFIRMED", transp: "TRANSPARENT"
   })));
-writeFileSync("availability.ics", toICS("Spanel Planetarium — Availability", publicEvents));
+writeFileSync("availability.ics", toICS("Spanel Planetarium — Availability", publicEvents, "avail"));
 console.log(`Wrote availability.ics: ${openRows.length} available + ${bookedRows.length} reserved.`);
 
 // ---- STAFF feed: booked shows with detail, NO contact fields -------------------
@@ -103,5 +144,5 @@ const staffEvents = staffRows.map(s => {
     status: s.status === "confirmed" ? "CONFIRMED" : "TENTATIVE"
   };
 });
-writeFileSync("staff-calendar.ics", toICS("Spanel Planetarium — Shows", staffEvents));
+writeFileSync("staff-calendar.ics", toICS("Spanel Planetarium — Shows", staffEvents, "staff"));
 console.log(`Wrote staff-calendar.ics with ${staffRows.length} booked shows.`);
